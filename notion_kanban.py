@@ -5,6 +5,10 @@ from constants import NOTION_API_TOKEN, DATABASE_ID
 
 
 class NotionKanban:
+    """
+    A class to interact with a Notion Kanban board via the Notion API.
+    """
+
     # Class variables to hold the API token and Database ID
     NOTION_API_TOKEN = NOTION_API_TOKEN
     DATABASE_ID = DATABASE_ID
@@ -23,8 +27,7 @@ class NotionKanban:
         response = requests.post(url, headers=cls.headers)
         
         if response.status_code == 200:
-            data = response.json()
-            return data.get("results", [])
+            return response.json().get("results", [])
         else:
             print(f"Error: {response.status_code}")
             print(response.text)
@@ -37,13 +40,10 @@ class NotionKanban:
         
         for result in cards:
             properties = result['properties']
-            
-            # Extract relevant fields
             responsible_person_id = properties['Responsable']['people'][0]['id'] if properties['Responsable']['people'] else None
             card_status = properties['Statut']['status']['name'] if properties['Statut']['status'] else None
             title = properties['Nom']['title'][0]['text']['content'] if properties['Nom']['title'] else "No Title"
             
-            # Apply filters (if any)
             if (responsible_id is None or responsible_person_id == responsible_id) and \
                (status_name is None or card_status == status_name):
                 filtered_cards.append({
@@ -67,29 +67,20 @@ class NotionKanban:
     def create_kanban_card(cls, title, status="À faire"):
         """Create a new Kanban card"""
         url = "https://api.notion.com/v1/pages"
-        
-        # Data payload to create a new card
         data = {
             "parent": {"database_id": cls.DATABASE_ID},
             "properties": {
                 "Nom": {
                     "title": [
-                        {
-                            "text": {
-                                "content": title
-                            }
-                        }
+                        {"text": {"content": title}}
                     ]
                 },
                 "Statut": {
-                    "status": {
-                        "name": status
-                    }
+                    "status": {"name": status}
                 }
             }
         }
         
-        # Send the POST request to create the card
         response = requests.post(url, headers=cls.headers, data=json.dumps(data))
         
         if response.status_code == 200:
@@ -107,13 +98,10 @@ class NotionKanban:
         response = requests.get(url, headers=cls.headers)
         
         if response.status_code == 200:
-            data = response.json()
-            properties = data.get("properties", {})
-            
+            properties = response.json().get("properties", {})
             field_options = {}
             
             for field_name, field_data in properties.items():
-                # Handle different types of fields (status, select, multi_select)
                 if field_data["type"] in ["select", "multi_select", "status"]:
                     field_options[field_name] = {
                         "type": field_data["type"],
@@ -125,7 +113,6 @@ class NotionKanban:
             print(f"Error: {response.status_code}")
             print(response.text)
             return None
-
 
 
 def test_fetch_kanban_cards():
@@ -168,6 +155,7 @@ def test_create_kanban_card():
     new_card_status = "À faire"  # You can change the status if needed
     NotionKanban.create_kanban_card(new_card_title, new_card_status)
 
+
 def test_fetch_field_options():
     """Test fetching all unique options for each field (status, select, etc.) in the database."""
     field_options = NotionKanban.fetch_field_options()
@@ -184,9 +172,8 @@ def test_fetch_field_options():
         print("Failed to fetch field options.")
 
 
-
-# Run all tests
 if __name__ == "__main__":
+    # Uncomment the tests you want to run
     # print("Testing fetch_kanban_cards:")
     # test_fetch_kanban_cards()
 
@@ -199,6 +186,5 @@ if __name__ == "__main__":
     # print("\nTesting create_kanban_card:")
     # test_create_kanban_card()
 
-    print("\nTesting test_fetch_field_options:")
+    print("\nTesting fetch_field_options:")
     test_fetch_field_options()
-

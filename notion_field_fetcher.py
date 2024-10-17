@@ -1,10 +1,12 @@
-
 import requests
-import json
 from constants import NOTION_API_TOKEN, DATABASE_ID
 
 
 class NotionFieldFetcher:
+    """
+    NotionFieldFetcher interacts with the Notion API to fetch and deduce field options from a specified Notion database.
+    """
+
     # Class variables for Notion API
     NOTION_API_TOKEN = NOTION_API_TOKEN
     DATABASE_ID = DATABASE_ID
@@ -23,8 +25,7 @@ class NotionFieldFetcher:
         response = requests.get(url, headers=cls.headers)
 
         if response.status_code == 200:
-            data = response.json()
-            return data["properties"]
+            return response.json().get("properties", {})
         else:
             print(f"Error fetching database schema: {response.status_code}")
             print(response.text)
@@ -39,12 +40,8 @@ class NotionFieldFetcher:
             field_type = details["type"]
             options = []
 
-            if field_type == "select":
-                options = [option["name"] for option in details["select"]["options"]]
-            elif field_type == "status":
-                options = [option["name"] for option in details["status"]["options"]]
-            elif field_type == "multi_select":
-                options = [option["name"] for option in details["multi_select"]["options"]]
+            if field_type in ["select", "status", "multi_select"]:
+                options = [option["name"] for option in details[field_type]["options"]]
 
             field_options[field_name] = {
                 "type": field_type,
@@ -68,6 +65,7 @@ class NotionFieldFetcher:
         else:
             print("No field options found.")
 
+
 # Example Usage
 if __name__ == "__main__":
     notion_fetcher = NotionFieldFetcher()
@@ -75,8 +73,9 @@ if __name__ == "__main__":
     # Fetch the database schema
     properties = notion_fetcher.fetch_database_schema()
     
-    # Deduce field options
-    field_options = notion_fetcher.deduce_field_options(properties)
-    
-    # Display the field options
-    notion_fetcher.display_field_options(field_options)
+    if properties:
+        # Deduce field options
+        field_options = notion_fetcher.deduce_field_options(properties)
+        
+        # Display the field options
+        notion_fetcher.display_field_options(field_options)
