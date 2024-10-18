@@ -5,7 +5,7 @@
 
 # Admin action BO Check
 
-# Admin action Create CustomApplicationConfigurations
+# Admin action Create CustomApplicationConfigurations => pupeteer
 
 ## Main steps
 
@@ -21,7 +21,7 @@
 
 ### Step 3: Query Notion
 
-- fetch Notion block
+- fetch Notion page (card) using it's id (when card in full page in url)
 - extract & clean data
 - perform basic checks
     - Card in the right step
