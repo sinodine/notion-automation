@@ -61,7 +61,8 @@ class NotionKanban:
         if cards:
             for card in cards:
                 print(f"Card ID: {card['id']}")
-                print(f"Title: {card['properties']['Nom']['title'][0]['text']['content']}")
+                title = card['properties']['Nom']['title'][0]['text']['content'] if card['properties']['Nom']['title'] else "No Title"
+                print(f"Title: {title}")
                 print(f"Status: {card['properties']['Statut']['status']['name']}")
                 responsible = card['properties']['Responsable']['people'][0]['id'] if card['properties']['Responsable']['people'] else "No Responsible"
                 print(f"Responsible: {responsible}")
@@ -160,6 +161,125 @@ class NotionKanban:
         #         print(f"Error: {response.status_code}")
         #         print(response.text)
         #         return None
+    @classmethod
+    def print_kanban_card_by_id(cls, card_id):
+        """Print the details of a Kanban card with a given ID in a pretty format"""
+        kanban_cards = cls.fetch_kanban_cards()
+        
+        if kanban_cards is not None:
+            card = next((card for card in kanban_cards if card['id'] == card_id), None)
+
+            if card:
+                title = card['properties']['Nom']['title'][0]['text']['content'] if card['properties']['Nom']['title'] else "No Title"
+                status = card['properties']['Statut']['status']['name'] if card['properties']['Statut']['status'] else "No Status"
+                responsible = card['properties']['Responsable']['people'][0]['id'] if card['properties']['Responsable']['people'] else "No Responsible"
+                
+                # Print card details in a pretty format
+                print("="*40)
+                print(f"Card ID: {card['id']}")
+                print(f"Title: {title}")
+                print(f"Status: {status}")
+                print(f"Responsible: {responsible}")
+                
+                # Fetch and print comments
+                comments_url = f"https://api.notion.com/v1/comments?block_id={card_id}"
+                comments_response = requests.get(comments_url, headers=cls.headers)
+                
+                if comments_response.status_code == 200:
+                    comments = comments_response.json().get('results', [])
+                    if comments:
+                        print("Comments:")
+                        for comment in comments:
+                            rich_text = comment.get('rich_text', [])
+                            if rich_text:
+                                print(f"- {rich_text[0].get('text', {}).get('content', 'No Content')}")
+                            else:
+                                print("- No Content")
+                    else:
+                        print("No Comments")
+                else:
+                    print("Failed to fetch comments.")
+                
+                print("="*40)
+                print("")
+            else:
+                print(f"No card found with ID: {card_id}")
+        else:
+            print("Failed to fetch Kanban cards.")
+
+ 
+    @classmethod
+    def add_comment_to_card(cls, card_id, comment_text):
+        """Add a comment to a Kanban card"""
+        url = "https://api.notion.com/v1/comments"
+        data = {
+            "parent": {
+                "page_id": card_id
+            },
+            "rich_text": [
+                {
+                    "text": {
+                        "content": comment_text
+                    }
+                }
+            ]
+        }
+        
+        response = requests.post(url, headers=cls.headers, json=data)
+        
+        if response.status_code == 200:
+            print("Comment added successfully!")
+            return response.json()
+        else:
+            print(f"Error: {response.status_code}")
+            print(response.text)
+            return None
+        
+    # NEW FUNCTION TO TAG SOMEONE IN A COMMENT
+    @classmethod
+    def tag_person_in_comment(cls, card_id, comment_text, person_id):
+        """Tag a person in a comment on a Kanban card"""
+        url = "https://api.notion.com/v1/comments"
+        data = {
+            "parent": {
+            "page_id": card_id
+            },
+            "rich_text": [
+            {
+                "type": "mention",
+                "mention": {
+                "type": "user",
+                "user": {
+                    "id": person_id
+                }
+                },
+                "plain_text": f"@{person_id} {comment_text}" # fix text comment not showing
+            }
+            ]
+        }
+        
+        response = requests.post(url, headers=cls.headers, json=data)
+        
+        if response.status_code == 200:
+            print("Comment added successfully!")
+            return response.json()
+        else:
+            print(f"Error: {response.status_code}")
+            print(response.text)
+            return None
+
+    # get all users ID
+    @classmethod
+    def get_all_users(cls):
+        url = "https://api.notion.com/v1/users"
+        response = requests.get(url, headers=cls.headers)
+
+        if response.status_code == 200:
+            return response.json().get("results", [])
+        else:
+            print(f"Error: {response.status_code}")
+            print(response.text)
+            return None
 
 
 def test_fetch_kanban_cards():
@@ -237,6 +357,58 @@ def test_modify_kanban_card_field():
     else:
         print("Failed to create a new card for modification test.")
 
+def test_create_and_comment_kanban_card():
+    """Test creating a new Kanban card, adding a comment, and displaying the details."""
+    # Step 1: Create a new card
+    new_card_title = "Task with Comment"
+    new_card_status = "À faire"
+    new_card = NotionKanban.create_kanban_card(new_card_title, new_card_status)
+    
+    if new_card:
+        card_id = new_card['id']
+        
+        # Step 2: Add a comment to the card
+        comment_text = "This is a test comment."
+        NotionKanban.add_comment_to_card(card_id, comment_text)
+        
+        # Step 3: Fetch and print the card details
+        NotionKanban.print_kanban_card_by_id(card_id)
+    else:
+        print("Failed to create a new card for comment test.")
+
+def test_tag_person_in_comment():
+    """Test tagging a person in a comment on a Kanban card."""
+    # Step 1: Create a new card
+    new_card_title = "Task with Tagged Comment"
+    new_card_status = "À faire"
+    new_card = NotionKanban.create_kanban_card(new_card_title, new_card_status)
+    
+    if new_card:
+        card_id = new_card['id']
+        
+        # Step 2: Tag a person in a comment
+        comment_text = "This is a test comment with a tagged person."
+        person_id = "f57955ac-c81f-451d-9641-9a548e0f8308"  
+        NotionKanban.tag_person_in_comment(card_id, comment_text, person_id)
+        
+        # Step 3: Fetch and print the card details
+        NotionKanban.print_kanban_card_by_id(card_id)
+    else:
+        print("Failed to create a new card for tagged comment test.")
+
+def test_fetch_all_users():
+    """Test fetching all users from the Notion workspace."""
+    users = NotionKanban.get_all_users()
+    
+    if users is not None:
+        print(f"Fetched {len(users)} users.")
+        for user in users:
+            print(f"User ID: {user['id']}")
+            print(f"Name: {user['name']}")
+            print(f"Email: {user.get('person', {}).get('email', 'No Email')}")
+            print("="*40)
+    else:
+        print("Failed to fetch users.")
 
 # def test_fetch_field_options():
 #     """Test fetching all unique options for each field (status, select, etc.) in the database."""
@@ -265,11 +437,19 @@ if __name__ == "__main__":
     # print("\nTesting print_kanban_cards:")
     # test_print_kanban_cards()
 
+    # test_create_and_comment_kanban_card()
+
+    test_tag_person_in_comment()
+
+    # test_fetch_all_users()
+
+    # NotionKanban.print_kanban_card_by_id("123acdc2-cc58-8004-852e-f837c3ab0b08")
+
     # print("\nTesting create_kanban_card:")
     # test_create_kanban_card()
 
     # print("\nTesting fetch_field_options:")
     # test_fetch_field_options()
 
-    print("\nTesting test_modify_kanban_card_field:")
-    test_modify_kanban_card_field()
+    # print("\nTesting test_modify_kanban_card_field:")
+    # test_modify_kanban_card_field()
