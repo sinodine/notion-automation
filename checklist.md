@@ -32,6 +32,7 @@
 - inject notion data in form
 - add images
 - check form
+- metadata with card id
 
 ### Step 5: Log
 
@@ -48,8 +49,12 @@
 - no block found
 - import folder issues (format)
 - one of the field extracted not matching format (validators)
+
 - Card not in the right step
 - missing mandatory fields
+- card in trashs (archived: true or in_trash)
+- page in trash
+- emoji
 
 - missing logo
 - already app created
@@ -67,3 +72,7 @@
 - missing optionnal fields => warning
 - Online terms
 
+## Careful
+
+- inline link for website
+- error codes

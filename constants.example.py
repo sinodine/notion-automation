@@ -10,3 +10,24 @@ properties = {
     'Responsable': {'id': 'xE%3EJ', 'type': 'people', 'people': [{'object': 'user', 'id': 'ac7a3bd0-c111-4464-8f45-8a857a1abc8a'}]},
     'Nom': {'id': 'title', 'type': 'title', 'title': [{'type': 'text', 'text': {'content': 'Réfléchir à des idées de fonctionnalités', 'link': None}, 'plain_text': 'Réfléchir à des idées de fonctionnalités'}]}
 }
+
+
+API_BASE_URL = "https://api.notion.com/v1"
+RETRIEVE_BLOCK_URL = f"{API_BASE_URL}/blocks/{DATABASE_ID}/children" # GET: To retrieve the paginated blocks of a page (max 100 blocks) # POST: To create a new block # PATCH: To create and append a blocks
+RETRIEVE_PAGE_URL = f"{API_BASE_URL}/pages/{DATABASE_ID}"
+RETRIEVE_DATABASE_URL = f"{API_BASE_URL}/databases/{DATABASE_ID}" # GET: To retrieve a database columns
+GET_BLOCK_URL = f"{API_BASE_URL}/blocks/{{block_id}}" # GET: To retrieve a block # PATCH: To update a block # DELETE: To delete a block
+QUERY_DATABASE_URL = f"{API_BASE_URL}/databases/{{database_id}}/query" # POST to query the database with filters
+RETRIEVE_USER_URL = f"{API_BASE_URL}/users/me" # GET to retrieve the bot token user
+COMMENTS_URL = f"{API_BASE_URL}/comments" # POST to create a comment block_id and content # GET to retrieve all comments of a block_id
+
+
+# One data base -> multiple pages
+# One page -> multiple blocks
+
+# properties = columns
+# page = item (row)
+# block = content
+
+
+# pages are technically blocks
