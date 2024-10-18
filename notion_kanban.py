@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from constants import NOTION_API_TOKEN, DATABASE_ID
+from field_manager import FieldCategory, FieldManager
 
 
 class NotionKanban:
@@ -59,9 +60,55 @@ class NotionKanban:
         """Print Kanban cards"""
         if cards:
             for card in cards:
-                print(f"Kanban Card: {card['title']}, Responsible: {card['responsible_id']}, Status: {card['status']}")
+                print(f"Card ID: {card['id']}")
+                print(f"Title: {card['properties']['Nom']['title'][0]['text']['content']}")
+                print(f"Status: {card['properties']['Statut']['status']['name']}")
+                responsible = card['properties']['Responsable']['people'][0]['id'] if card['properties']['Responsable']['people'] else "No Responsible"
+                print(f"Responsible: {responsible}")
+                print("")
         else:
             print("No matching cards found.")
+
+    @classmethod
+    def modify_kanban_card_field(cls, card_id, field_category, new_value):
+        """Modify a field of a Kanban card"""
+        field_manager = FieldManager()
+        field_options = field_manager.list_options(field_category)
+        
+        # Debug print to check the structure of field_options
+        print("Field Options:", field_options)
+        
+        # Find the option ID for the new value
+        option_id = field_options.get(new_value)
+        
+        if not option_id:
+            print(f"Error: Option '{new_value}' not found in field category '{field_category.name}'.")
+            return
+        
+        url = f"https://api.notion.com/v1/pages/{card_id}"
+        data = {
+            "properties": {
+                field_category.value: {
+                    "status": {"id": option_id} if field_category == FieldCategory.STATUT else {"select": {"id": option_id}}
+                }
+            }
+        }
+        
+        # Debug print to check the request payload
+        print("Request Payload:", json.dumps(data, indent=2))
+        
+        response = requests.patch(url, headers=cls.headers, json=data)
+        
+        # Debug print to check the response
+        print("Response Status Code:", response.status_code)
+        print("Response Text:", response.text)
+        
+        if response.status_code == 200:
+            print("Kanban card field modified successfully.")
+        else:
+            print(f"Error: {response.status_code}")
+            print(response.text)
+
 
     @classmethod
     def create_kanban_card(cls, title, status="À faire"):
@@ -90,29 +137,29 @@ class NotionKanban:
             print(f"Error: {response.status_code}")
             print(response.text)
             return None
-        
-    @classmethod
-    def fetch_field_options(cls):
-        """Fetch all unique options for each field (status, select, etc.) in the database."""
-        url = f"https://api.notion.com/v1/databases/{cls.DATABASE_ID}"
-        response = requests.get(url, headers=cls.headers)
-        
-        if response.status_code == 200:
-            properties = response.json().get("properties", {})
-            field_options = {}
             
-            for field_name, field_data in properties.items():
-                if field_data["type"] in ["select", "multi_select", "status"]:
-                    field_options[field_name] = {
-                        "type": field_data["type"],
-                        "options": field_data[field_data["type"]]["options"]
-                    }
+        # @classmethod
+        # def fetch_field_options(cls):
+        #     """Fetch all unique options for each field (status, select, etc.) in the database."""
+        #     url = f"https://api.notion.com/v1/databases/{cls.DATABASE_ID}"
+        #     response = requests.get(url, headers=cls.headers)
+            
+        #     if response.status_code == 200:
+        #         properties = response.json().get("properties", {})
+        #         field_options = {}
+                
+        #         for field_name, field_data in properties.items():
+        #             if field_data["type"] in ["select", "multi_select", "status"]:
+        #                 field_options[field_name] = {
+        #                     "type": field_data["type"],
+        #                     "options": field_data[field_data["type"]]["options"]
+        #                 }
 
-            return field_options
-        else:
-            print(f"Error: {response.status_code}")
-            print(response.text)
-            return None
+        #         return field_options
+        #     else:
+        #         print(f"Error: {response.status_code}")
+        #         print(response.text)
+        #         return None
 
 
 def test_fetch_kanban_cards():
@@ -155,21 +202,56 @@ def test_create_kanban_card():
     new_card_status = "À faire"  # You can change the status if needed
     NotionKanban.create_kanban_card(new_card_title, new_card_status)
 
-
-def test_fetch_field_options():
-    """Test fetching all unique options for each field (status, select, etc.) in the database."""
-    field_options = NotionKanban.fetch_field_options()
+def test_modify_kanban_card_field():
+    """Test creating and then modifying a field of a Kanban card."""
+    # Create a new card
+    new_card_title = "Test Task for Modification"
+    new_card_status = "À faire"
+    new_card = NotionKanban.create_kanban_card(new_card_title, new_card_status)
     
-    if field_options is not None:
-        print("Fetched field options successfully:")
-        for field_name, field_data in field_options.items():
-            print(f"\nField: {field_name}")
-            print(f"Type: {field_data['type']}")
-            print("Options:")
-            for option in field_data["options"]:
-                print(f"  - Name: {option['name']}, ID: {option['id']}")
+    if new_card:
+        card_id = new_card['id']
+        field_category = FieldCategory.STATUT
+        new_value = "Fait"
+        
+        # Fetch and print the card before modification
+        kanban_cards = NotionKanban.fetch_kanban_cards()
+        card_before = next((card for card in kanban_cards if card['id'] == card_id), None)
+        if card_before:
+            print("\nCard before modification:")
+            NotionKanban.print_kanban_cards([card_before])
+        else:
+            print("Card not found before modification.")
+        
+        # Modify the card
+        NotionKanban.modify_kanban_card_field(card_id, field_category, new_value)
+        
+        # Fetch and print the card after modification
+        kanban_cards = NotionKanban.fetch_kanban_cards()
+        card_after = next((card for card in kanban_cards if card['id'] == card_id), None)
+        if card_after:
+            print("\nCard after modification:")
+            NotionKanban.print_kanban_cards([card_after])
+        else:
+            print("Card not found after modification.")
     else:
-        print("Failed to fetch field options.")
+        print("Failed to create a new card for modification test.")
+
+
+# def test_fetch_field_options():
+#     """Test fetching all unique options for each field (status, select, etc.) in the database."""
+#     field_options = NotionKanban.fetch_field_options()
+    
+#     if field_options is not None:
+#         print("Fetched field options successfully:")
+#         for field_name, field_data in field_options.items():
+#             print(f"\nField: {field_name}")
+#             print(f"Type: {field_data['type']}")
+#             print("Options:")
+#             for option in field_data["options"]:
+#                 print(f"  - Name: {option['name']}, ID: {option['id']}")
+#     else:
+#         print("Failed to fetch field options.")
 
 
 if __name__ == "__main__":
@@ -186,5 +268,8 @@ if __name__ == "__main__":
     # print("\nTesting create_kanban_card:")
     # test_create_kanban_card()
 
-    print("\nTesting fetch_field_options:")
-    test_fetch_field_options()
+    # print("\nTesting fetch_field_options:")
+    # test_fetch_field_options()
+
+    print("\nTesting test_modify_kanban_card_field:")
+    test_modify_kanban_card_field()
