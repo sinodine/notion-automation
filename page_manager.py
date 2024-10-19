@@ -2,25 +2,66 @@ import requests
 from enum import Enum
 from constants import DATABASE_ID, USER_ID1, NOTION_API_TOKEN, DATABASE_URL, PAGE_URL1, PAGE_URL2, PAGE_URL3, PAGE_URL_TEMPLATE, BLOCK_URL_TEMPLATE, USER_ID2, USER_URL, USER_URL_TEMPLATE
 import re
+from typing import Any, Optional
 
 # Enums for property IDs and display names
-class NotionPropertyID(Enum):
+class NotionDatabasePropertyID(Enum):
     """Enum for Notion property IDs based on the results of fetch_db_property_mapping."""
     DATE_ECHEANCE = 'C%5C%3C%3A'
     STATUS = "k%3FMm"  
     TEAM = "rIvf"
     RESPONSIBLE = "xE%3EJ"
     NAME = "title"
-    ID = "id"
 
-class NotionPropertyDisplayName(Enum):
+class NotionDatabasePropertyDisplayName(Enum):
     """Enum for Notion property display based on Notion property IDs."""
     DATE_ECHEANCE = "Date d’échéance"
     STATUS = "Statut"  
     TEAM = "Équipe"
     RESPONSIBLE = "Responsable"
     NAME = "Nom"
+
+class NotionBasePropertyID(Enum):
+    """Enum for Notion base property IDs."""
+    OBJECT = "object"
+    ID = "id"
+    LAST_EDITED_TIME = "last_edited_time"
+    CREATED_TIME = "created_time"
+    ARCHIVED = "archived"
+    LAST_EDITED_BY = "last_edited_by"
+    PARENT = "parent"
+
+class NotionBasePropertyDisplayName(Enum):
+    """Enum for Notion base property display names."""
+    OBJECT = "Object"
     ID = "ID"
+    LAST_EDITED_TIME = "Last Edited Time"
+    CREATED_TIME = "Created Time"
+    ARCHIVED = "Archived"
+    LAST_EDITED_BY = "Last Edited By"
+    PARENT = "Parent"
+
+class NotionPagePropertyID(Enum):
+    """Enum for Notion page property IDs."""
+    COVER = "cover"
+    ICON = "icon"
+
+class NotionPagePropertyDisplayName(Enum):
+    """Enum for Notion page property display names."""
+    COVER = "Cover"
+    ICON = "Icon"
+
+class NotionCommentPropertyID(Enum):
+    """Enum for Notion comment property IDs."""
+    USER_ID = "user_id"
+    USER_NAME = "user_name"
+    COMMENT_TEXT = "comment_text"
+
+class NotionCommentPropertyDisplayName(Enum):
+    """Enum for Notion comment property display names."""
+    USER_ID = "User ID"
+    USER_NAME = "User Name"
+    COMMENT_TEXT = "Comment Text"
 
 class NotionManager:
     """
@@ -143,44 +184,19 @@ class NotionManager:
 class NotionPageManager(NotionManager):
     """Manager class for handling Notion pages and related operations."""
 
-    def __init__(self, database_id):
+    def __init__(self, database_id: str):
         super().__init__(database_id)
         self.property_mapping = self.fetch_db_property_mapping()
 
-    def get_page_interpreted_properties(self, page_data, for_display=False):
-        """
-        Returns a dictionary with human-readable values for Notion page properties.
-        If `for_display` is True, it returns display-friendly values.
-        """
-        interpreted_properties = {}
-        properties = page_data.get('properties', {})
-        page_id = page_data.get('id')
-
-        interpreted_properties[NotionPropertyID.ID] = page_id
-
-        for property_name, property_data in properties.items():
-            property_id = property_data['id']
-            property_type = property_data['type']
-            content = self._extract_property_content(property_data)
-
-            try:
-                interpreted_value = self._extract_property(property_type, content, for_display)
-                interpreted_properties[NotionPropertyID(property_id)] = interpreted_value
-            except ValueError as e:
-                print(f"Error interpreting property '{property_name}': {str(e)}")
-                interpreted_properties[NotionPropertyID(property_id)] = None
-
-        return interpreted_properties
-
-    def _extract_property_content(self, property_data):
+    def _extract_property_content(self, property_data: dict[str, Any]) -> Any:
         """Extracts the content for a given property type."""
         return property_data.get(property_data['type'], None)
 
-    def _extract_plain_text_from_rich_text(self, rich_text_array):
+    def _extract_plain_text_from_rich_text(self, rich_text_array: list[dict[str, Any]]) -> str:
         """Extracts plain text from a list of rich text objects."""
         return ''.join(item.get('plain_text', '') for item in rich_text_array)
 
-    def _extract_property(self, property_type, content, for_display=False):
+    def _extract_property(self, property_type: str, content: Any, for_display: bool = False) -> Any:
         """Extracts content based on property type and whether it's for display."""
         extractors = {
             'title': self._extract_plain_text_from_rich_text,
@@ -199,96 +215,192 @@ class NotionPageManager(NotionManager):
             'status': lambda c: c.get('name') if for_display else c.get('id'),
             'emoji': lambda c: c.get('name') if for_display else c.get('id'),
             'formula': lambda c: c.get('name') if for_display else c.get('id'),
-            'created_time': lambda c: c,
-            'last_edited_time': lambda c: c,
-            'last_edited_by': lambda c: c,
-            'created_by': lambda c: c,
-            'rollup': lambda c: c,
         }
         return extractors.get(property_type, lambda c: None)(content)
 
-    def _extract_comment_text(self, comment, for_display=False):
-        """Extracts and formats the rich text content of a comment."""
-        return ''.join(part.get('plain_text', '') if part['type'] == 'text' else f"@{part['mention']['user'].get('name', 'Unknown')}"
-                       for part in comment.get("rich_text", []))
-
-    def _interpret_comments(self, comments, for_display=False):
-        """Extracts and interprets comments from the API response."""
-        interpreted_comments = []
-        for comment in comments:
-            created_by = comment.get("created_by", {})
-            user_id = created_by.get("id", "Unknown")
-            user_name = self.fetch_user_name(user_id) if for_display else None
-            created_time = comment.get("created_time", "Unknown")
-            comment_text = self._extract_comment_text(comment, for_display)
-            last_edited_time = comment.get("last_edited_time", "Not edited")
-
-            interpreted_comments.append({
-                "user_id": user_id,
-                "user_name": user_name,
-                "created_time": created_time,
-                "comment_text": comment_text,
-                "id": comment.get("id", "Unknown"),
-                "last_edited_time": last_edited_time
-            })
-        return interpreted_comments
-
-    def display_comments(self, interpreted_comments, dev_data_display=False):
-        """Displays the comments in a formatted manner."""
-        line = "-" * 40
-        print("\nComments:\n" + line)
+    def extract_data(self, page_or_comment_data: dict[str, Any]| list[dict[str, Any]], for_display: bool = False) -> dict[str, Any]| list[dict[str, Any]]:
+        """
+        General function to extract data from either a Notion page or a comment.
+        It uses the 'object' field in the data to determine what to extract.
+        """
+        if type(page_or_comment_data) is list:
+            return self._extract_data_list(page_or_comment_data, for_display)
         
-        if not interpreted_comments:
-            print("No comments found.")
-            return
+        object_type = page_or_comment_data.get('object')
+        if object_type == 'page':
+            return self._extract_page_data(page_or_comment_data, for_display)
+        elif object_type == 'comment':
+            return self._extract_comment_data(page_or_comment_data, for_display)
+        else:
+            raise ValueError(f"Unsupported object type: {object_type}")
+            
+    def _extract_data_list(self, data_list: list[dict[str, Any]], for_display: bool = False) -> list[dict[str, Any]]:
+        """
+        Extracts data from a list of Notion pages or comments.
+        Returns a list of extracted data.
+        """
+        return [self.extract_data(data, for_display) for data in data_list]
+    
+    def _extract_data_base_properties(self, page_data: dict[str, Any]) -> dict[NotionBasePropertyID, Any]:
+        """
+        Extracts base properties from a Notion page.
+        Returns a dictionary with extracted properties.
+        """
+        interpreted_properties = {}
+        for prop in NotionBasePropertyID:
+            interpreted_properties[prop] = page_data.get(prop.value)
+        return interpreted_properties
 
-        for comment in interpreted_comments:
-            created_time = comment.get("created_time", "Unknown")
-            last_edited_time = comment.get("last_edited_time", "Not edited")
-            user_name = comment.get("user_name", "Unknown")
-            comment_text = comment.get("comment_text", "Unknown")
+    def _extract_data_page_default_properties(self, page_data: dict[str, Any]) -> dict[NotionPagePropertyID, Any]:
+        """
+        Extracts properties from a Notion page based on NotionPagePropertyID.
+        Returns a dictionary with extracted properties.
+        """
+        interpreted_properties = {}
+        for prop in NotionPagePropertyID:
+            interpreted_properties[prop] = page_data.get(prop.value)
+        return interpreted_properties
 
-            if dev_data_display:
-                print(f"Comment ID: {comment.get('id', 'Unknown')}")
-                print(f"Created Time: {created_time}")
-                print(f"Last Edited Time: {last_edited_time}")
-                print(f"User ID: {comment.get('user_id', 'Unknown')}")
-                print(f"User Name: {user_name if user_name else 'Unknown'}")
-                print(f"Comment Text: {comment_text}")
-            else:
-                user_display = user_name or comment.get('user_id', 'Unknown')
-                print(f"\n[{created_time}] - by {user_display}:")
-                print(f"  {comment_text}\n")
+    def _extract_data_page_database_properties(self, properties_data: dict[str, Any], for_display: bool = False) -> dict[NotionDatabasePropertyID, Any]:
+        """
+        Extracts properties from page_data['properties'] based on NotionDatabasePropertyID.
+        Returns a dictionary with extracted properties.
+        """
+        interpreted_properties = {}
 
-            print(line)
+        for prop in NotionDatabasePropertyID:
+            prop_name = self.property_mapping.get(prop.value)
+            property_data = properties_data.get(prop_name)
+            if property_data:
+                property_type = property_data['type']
+                content = self._extract_property_content(property_data)
+                interpreted_value = self._extract_property(property_type, content, for_display)
+                interpreted_properties[prop] = interpreted_value
 
-    def display_page(self, interpreted_properties, detailed=False):
-        """Displays the page properties in a formatted manner."""
-        prefix = "* "
+        return interpreted_properties
+
+    def _extract_page_data(self, page_data: dict[str, Any], for_display: bool = False) -> dict[NotionPagePropertyID, Any]:
+        """
+        Extracts and interprets properties from a Notion page.
+        """
+        interpreted_properties = {}
+
+        # Step 1: Extract properties from NotionBasePropertyID
+        base_properties = self._extract_data_base_properties(page_data)
+        interpreted_properties.update(base_properties)
+
+        # Step 2: Extract properties from NotionPagePropertyID
+        page_properties = self._extract_data_page_default_properties(page_data)
+        interpreted_properties.update(page_properties)
+
+        # Step 3: Extract properties from NotionDatabasePropertyID
+        properties = page_data.get('properties', {})
+        database_properties = self._extract_data_page_database_properties(properties, for_display)
+        interpreted_properties.update(database_properties)
+
+        return interpreted_properties
+    
+    def _extract_comment_text(self, comment_data: dict[str, Any], for_display: bool = False) -> str:
+        """
+        Extracts the comment text from a Notion comment.
+        """
+        rich_text = comment_data.get("rich_text", [])
+        return self._extract_plain_text_from_rich_text(rich_text)
+
+    def _extract_comment_data(self, comment_data: dict[str, Any], for_display: bool = False) -> dict[str, Any]:
+        """
+        Extracts and interprets content from a Notion comment.
+        """
+        interpreted_properties = {}
+
+        # Step 1: Extract base properties
+        base_properties = self._extract_data_base_properties(comment_data)
+        interpreted_properties.update(base_properties)
+
+        # Step 2: Extract comment text
+        comment_text = self._extract_comment_text(comment_data, for_display)
+        interpreted_properties[NotionCommentPropertyID.COMMENT_TEXT] = comment_text
+
+        # Step 3: Extract user ID and name
+        user_data = comment_data.get("created_by", {})
+        user_id = user_data.get("id")
+        user_name = user_data.get("name")
+        interpreted_properties[NotionCommentPropertyID.USER_ID] = user_id
+        interpreted_properties[NotionCommentPropertyID.USER_NAME] = user_name
+
+        if user_name is None and user_id:
+            user_name = self.fetch_user_name(user_id)
+            interpreted_properties[NotionCommentPropertyID.USER_NAME] = user_name + "(bot)"
+
+        return interpreted_properties
+    
+    def display_data_item(self, interpreted_data: dict[str, Any], detailed: bool, separator: bool = True):
+        """
+        General function to display either page or comment data.
+        Uses the 'object' field to determine whether to display a page or comment.
+        """
+        obj_type = interpreted_data.get(NotionBasePropertyID.OBJECT, 'Unknown')
+        if obj_type == 'page':
+            self._display_page(interpreted_data, detailed, separator)
+        elif obj_type == 'comment':
+            self._display_comment(interpreted_data, detailed, separator)
+        else:
+            print(f"Unsupported object type: {obj_type}")
+
+    def display_data(self, extracted_data_list: list[dict[str, Any]], detailed: bool = False):
+        """
+        General function to display either page or comment data.
+        Uses the 'object' field to determine whether to display a page or comment.
+        """
+        
+        if type(extracted_data_list) is list:
+            for extracted_data in extracted_data_list:
+                self.display_data_item(extracted_data, detailed, separator=False)
+        else:
+            self.display_data_item(extracted_data_list, detailed)
+
+    def _display_page(self, interpreted_properties: dict[NotionPagePropertyID, Any], detailed: bool, separator: bool):
+        """
+        Displays a page's properties in a formatted manner.
+        """
         n = 60
         c = 20
-
-        page_id = interpreted_properties.get(NotionPropertyID.ID, 'N/A')
-        print("\n" + "=" * n)
-        print(f"{('Page - ' + NotionPropertyDisplayName.ID.value):{c}}: {page_id}")
+        prefix = "* "
+        page_id = interpreted_properties.get(NotionBasePropertyID.ID, 'N/A')
+        print("\n" + "=" * n) if separator else ()
+        print(f"{'Page - ' + NotionBasePropertyDisplayName.ID.value:{c}}: {page_id}")
 
         if detailed:
             print("\nDetailed Properties:\n" + "-" * n)
-            for property_id, value in interpreted_properties.items():
-                if property_id == NotionPropertyID.ID:
-                    continue
-                display_name = NotionPropertyDisplayName[property_id.name].value
-                print(f"{(prefix + display_name):{c}}: {value if value is not None else 'N/A'}")
+            for prop in NotionDatabasePropertyID:
+                display_name = NotionDatabasePropertyDisplayName[prop.name].value
+                value = interpreted_properties.get(prop, 'N/A')
+                print(f"{(prefix + display_name):{c}}: {value}")
 
         print("=" * n)
 
-    def display_list_page(self, interpreted_properties_list, detailed=False):
-        """Displays a list of page properties in a formatted manner."""
-        for interpreted_properties in interpreted_properties_list:
-            self.display_page(interpreted_properties, detailed)
-    
+    def _display_comment(self, interpreted_properties: dict[str, Any], detailed: bool, separator: bool):
+        """
+        Displays a comment in a formatted manner.
+        """
+        n = 60
+        c = 20
+        prefix = "* "
+        page_id = interpreted_properties.get(NotionBasePropertyID.ID, 'N/A')
+        print("\n" + "=" * n) if separator else ()
+        print(f"{'Comment - ' + NotionBasePropertyDisplayName.ID.value:{c}}: {page_id}")
 
-    def add_comment_to_page(self, page_id, comment_text, users_to_mention=None):
+        if detailed:
+            print("\nDetailed Properties:\n" + "-" * n)
+            for prop in NotionCommentPropertyID:
+                display_name = NotionCommentPropertyDisplayName[prop.name].value
+                value = interpreted_properties.get(prop, 'N/A')
+                print(f"{(prefix + display_name):{c}}: {value}")
+        
+        print("=" * n)
+
+
+    def add_comment_to_page(self, page_id: str, comment_text: str, users_to_mention: Optional[list[str]] = None):
         """
         Adds a comment to a Notion page with optional user mentions.
         """
@@ -318,10 +430,11 @@ class NotionPageManager(NotionManager):
         }, json=data)
 
         if response.status_code != 200:
-            raise Exception(f"Failed to add comment: {response.text}")
+            raise Exception(f"Failed to add comment: {response.status_code} - {response.text}")
 
 
-### Testing Functions
+
+# Tests
 
 def test_fetch_db_property_mapping():
     """Test fetching the property mapping from the Notion database."""
@@ -335,8 +448,14 @@ def test_display_page():
     page_manager = NotionPageManager(DATABASE_ID)
     page_id = page_manager.get_page_id_from_url(PAGE_URL2)
     page_data = page_manager.fetch_page_data(page_id)
-    interpreted_properties = page_manager.get_page_interpreted_properties(page_data, for_display=True)
-    page_manager.display_page(interpreted_properties, detailed=True)
+
+    # Using the generalized extract_data method
+    interpreted_properties = page_manager.extract_data(page_data, for_display=True)
+
+    # print(interpreted_properties)
+    
+    # Using the generalized display_data method
+    page_manager.display_data(interpreted_properties, detailed=True)
 
 
 def test_display_list_page():
@@ -345,24 +464,29 @@ def test_display_list_page():
     page_urls = [PAGE_URL1, PAGE_URL2, PAGE_URL3]
 
     interpreted_properties_list = [
-        page_manager.get_page_interpreted_properties(
+        page_manager.extract_data(
             page_manager.fetch_page_data_from_url(page_url),
             for_display=True
         ) for page_url in page_urls
     ]
     
-    page_manager.display_list_page(interpreted_properties_list, detailed=True)
+    # Using the generalized display_data method for a list of pages
+    page_manager.display_data(interpreted_properties_list, detailed=True)
 
 
-def test_fetch_comments():
+def test_display_comments():
     """Test fetching and displaying comments for a given Notion page."""
-    detailed = False
+    detailed = True
     for_display = True
     comment_manager = NotionPageManager(DATABASE_ID)
     page_id = comment_manager.get_page_id_from_url(PAGE_URL3)
+    
+    # Fetching and interpreting comments
     comments = comment_manager.fetch_comments(page_id)
-    interpreted_comments = comment_manager._interpret_comments(comments, for_display)
-    comment_manager.display_comments(interpreted_comments, detailed)
+    interpreted_comments = comment_manager.extract_data(comments, for_display=for_display)
+    
+    # Using the generalized display_data method for comments
+    comment_manager.display_data(interpreted_comments, detailed)
 
 
 def test_add_comment():
@@ -390,15 +514,6 @@ def test_add_comment_with_mention():
     )
 
 
-def test_display_comments():
-    """Test fetching and displaying comments from blocks of a Notion page."""
-    comment_manager = NotionPageManager(DATABASE_ID)
-    page_id = comment_manager.get_page_id_from_url(PAGE_URL1)
-    comments = comment_manager.fetch_comments(page_id)
-    interpreted_comments = comment_manager._interpret_comments(comments, for_display=True)
-    comment_manager.display_comments(interpreted_comments)
-
-
 if __name__ == "__main__":
     # Uncomment the function(s) you want to test
     # test_display_page()
@@ -406,6 +521,6 @@ if __name__ == "__main__":
     # test_fetch_db_property_mapping()
     # test_add_comment()
     # test_add_comment_with_mention()
-    # test_fetch_comments()
-    # test_display_comments()
+    test_display_comments()
+    # test_fetch_all_user_ids()
     pass
