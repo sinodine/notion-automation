@@ -4,7 +4,7 @@ from constants import COMMENTS_URL, DATABASE_ID, DATABASE_URL_TEMPLATE, USER_ID1
 import re
 from typing import Any, Optional
 
-from utils import _extract_data_page_default_properties, _extract_property, _extract_property_content, display_data_item, _extract_comment_text, _extract_data_base_properties
+from utils import _extract_data_page_default_properties, _extract_property, _extract_property_content, _display_data_item, _extract_comment_text, _extract_data_base_properties
 
 class NotionManager:
     """
@@ -34,7 +34,7 @@ class NotionManager:
 
     # Fetch specific data
 
-    def fetch_db_property_mapping(self):
+    def fetch_db_property_mapping(self, show_options=False):
         """Fetch and map property IDs to their names from the Notion database."""
         if not self.database_id:
             raise ValueError("Database ID must be provided.")
@@ -42,6 +42,28 @@ class NotionManager:
         url = DATABASE_URL_TEMPLATE.format(database_id=self.database_id)
         database_info = self.fetch_url(url)
         properties = database_info.get('properties', {})
+
+        if show_options:
+            for property_name, property_data in properties.items():
+                property_id = property_data.get('id')
+                property_type = property_data.get('type')
+
+                # Check if the property type is either 'select' or 'status'
+                if property_type in ['select', 'status']:
+                    print(f"\nProperty Name: {property_name}")
+                    print(f"Property ID: {property_id}")
+                    print(f"Property Type: {property_type.capitalize()}")
+
+                    # Extract and print the available options for 'select' or 'status'
+                    options = property_data.get(property_type, {}).get('options', [])
+                    prefix = "    "
+                    if options:
+                        print(prefix + "Available Options:")
+                        for option in options:
+                            option_name = option.get('name')
+                            option_id = option.get('id')
+                            option_color = option.get('color')
+                            print(prefix + f"  - Name: {option_name}, ID: {option_id}, Color: {option_color}")
         
         # Map property IDs to their respective names
         return {details['id']: name for name, details in properties.items()}
@@ -167,7 +189,7 @@ class NotionPageManager(NotionManager):
 
         return interpreted_properties
     
-    def extract_page_data(self, page_data: dict[str, Any], for_display: bool = False) -> dict[NotionPagePropertyID, Any]:
+    def _extract_page_data(self, page_data: dict[str, Any], for_display: bool = False) -> dict[NotionPagePropertyID, Any]:
         """
         Extracts and interprets properties from a Notion page.
         """
@@ -198,7 +220,7 @@ class NotionPageManager(NotionManager):
         
         object_type = page_or_comment_data.get('object')
         if object_type == 'page':
-            return self.extract_page_data(page_or_comment_data, for_display)
+            return self._extract_page_data(page_or_comment_data, for_display)
         elif object_type == 'comment':
             return self._extract_comment_data(page_or_comment_data, for_display)
         else:
@@ -212,9 +234,9 @@ class NotionPageManager(NotionManager):
         
         if type(extracted_data_list) is list:
             for extracted_data in extracted_data_list:
-                display_data_item(extracted_data, detailed, separator=False)
+                _display_data_item(extracted_data, detailed, separator=False)
         else:
-            display_data_item(extracted_data_list, detailed)
+            _display_data_item(extracted_data_list, detailed)
 
     def add_comment_to_page(self, page_id: str, comment_text: str, users_to_mention: Optional[list[str]] = None):
         """
@@ -250,12 +272,13 @@ class NotionPageManager(NotionManager):
 
 
 
+
 # Tests
 
 def test_fetch_db_property_mapping():
     """Test fetching the property mapping from the Notion database."""
     page_manager = NotionPageManager(DATABASE_ID)
-    property_mapping = page_manager.fetch_db_property_mapping()
+    property_mapping = page_manager.fetch_db_property_mapping(show_options=True)
     print(property_mapping)
 
 
@@ -332,11 +355,11 @@ def test_add_comment_with_mention():
 
 if __name__ == "__main__":
     # Uncomment the function(s) you want to test
-    test_display_page()
-    test_display_list_page()
+    # test_display_page()
+    # test_display_list_page()
     test_fetch_db_property_mapping()
-    test_add_comment()
-    test_add_comment_with_mention()
-    test_display_comments()
-    test_fetch_all_user_ids()
+    # test_add_comment()
+    # test_add_comment_with_mention()
+    # test_display_comments()
+    # test_fetch_all_user_ids()
     pass

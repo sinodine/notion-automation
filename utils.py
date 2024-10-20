@@ -101,7 +101,7 @@ def display_comment(interpreted_properties: dict[str, Any], detailed: bool, sepa
     
     print("=" * n)
 
-def display_data_item(interpreted_data: dict[str, Any], detailed: bool, separator: bool = True):
+def _display_data_item(interpreted_data: dict[str, Any], detailed: bool, separator: bool = True):
     """
     General function to display either page or comment data.
     Uses the 'object' field to determine whether to display a page or comment.
